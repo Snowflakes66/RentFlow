@@ -24,7 +24,7 @@ class Landlord(models.Model):
     # null and blank True because this gets filled AFTER registration, not during
     nomba_subaccount_id = models.CharField(
         max_length=100,
-        unique=True,
+        #unique=True,
         null=True, blank=True,
     )
 

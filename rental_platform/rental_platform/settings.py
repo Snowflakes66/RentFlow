@@ -14,6 +14,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
+load_dotenv()
+
+NOMBA_BASE_URL = os.getenv('NOMBA_BASE_URL')
+NOMBA_ACCOUNT_ID = os.getenv('NOMBA_ACCOUNT_ID')
+NOMBA_SUBACCOUNT_ID = os.getenv('NOMBA_SUBACCOUNT_ID')
+NOMBA_CLIENT_ID = os.getenv('NOMBA_CLIENT_ID')
+NOMBA_CLIENT_SECRET = os.getenv('NOMBA_CLIENT_SECRET')
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env') 
