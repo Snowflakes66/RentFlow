@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from .models import Landlord
 from .nomba_client import nomba_post
 from django.conf import settings
+from .models import Tenant
 
 
 class LandlordRegistrationView(APIView):
@@ -21,7 +22,7 @@ class LandlordRegistrationView(APIView):
         phone_number = data.get('phone_number')
         password = data.get('password')
 
-        # Basic validation — make sure required fields are present
+        # Validation to make sure required fields are present
         if not all([name, email, phone_number, password]):
             return Response(
                 {'error': 'name, email, phone_number and password are required'},
@@ -60,16 +61,16 @@ class LandlordRegistrationView(APIView):
         landlord.account_ref = account_ref
         landlord.save()
 
-        # Step 5: Create a virtual account for this landlord
+        # Step 5: Creating a virtual account for this landlord
         virtual_account_response = nomba_post('/accounts/virtual', {
             'accountRef': f"va_{account_ref}",
             'accountName': name,
             'currency': 'NGN',
         })
         print("Virtual account response:", virtual_account_response)
-        # Check if virtual account creation was successful
+        # To Check if virtual account creation was successful
         if virtual_account_response.get('code') != '00':
-            # Subaccount was created but virtual account failed — flag it
+            # If Subaccount was created but virtual account failed it gets flag
             return Response(
                 {'error': 'Subaccount created but virtual account failed', 'details': virtual_account_response},
                 status=status.HTTP_502_BAD_GATEWAY
@@ -89,5 +90,54 @@ class LandlordRegistrationView(APIView):
             'email': landlord.email,
             'virtual_account_number': landlord.virtual_account_number,
             'account_name': landlord.account_name,
+        }, status=status.HTTP_201_CREATED)
+    
+
+
+
+class TenantRegistrationView(APIView):
+    def post(self, request):
+        data = request.data
+
+        # Step 1: Extract the tenant's info from the request
+        name = data.get('name')
+        email = data.get('email')
+        phone_number = data.get('phone_number')
+        password = data.get('password')
+
+        if not all([name, email, phone_number, password]):
+            return Response(
+                {'error': 'name, email, phone_number and password are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {'error': 'A tenant with this email already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Step 2: Create the Django User and Tenant record locally
+        user = User.objects.create_user(
+            username=email,  # using email as username
+            email=email,
+            password=password
+        )
+
+        tenant = Tenant.objects.create(
+            user=user,
+            name=name,
+            email=email,
+            phone_number=phone_number,
+        )
+
+
+        # Step 3: Return a success response with the tenant's details
+        return Response({
+            'message': 'Tenant registered successfully',
+            'tenant_id': tenant.id,
+            'name': tenant.name,
+            'email': tenant.email,
         }, status=status.HTTP_201_CREATED)
     
