@@ -76,7 +76,7 @@ class Tenant(models.Model):
     
 
 
-class Payments(models.Model):
+class Payment(models.Model):
     tenant = models.ForeignKey(
         Tenant,
         on_delete=models.CASCADE,

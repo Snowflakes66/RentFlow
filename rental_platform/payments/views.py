@@ -3,12 +3,11 @@ from django.shortcuts import render
 import uuid
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, permissions
 from django.contrib.auth.models import User
-from .models import Landlord
+from .models import Landlord, Tenant, Payment
 from .nomba_client import nomba_post
 from django.conf import settings
-from .models import Tenant
 
 
 class LandlordRegistrationView(APIView):
@@ -141,3 +140,80 @@ class TenantRegistrationView(APIView):
             'email': tenant.email,
         }, status=status.HTTP_201_CREATED)
     
+
+
+
+class InitiatePaymentView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        tenant = request.user.tenant_profile
+        landlord_id = request.data.get('landlord_id')
+        amount_naira = request.data.get('amount')
+
+        if not landlord_id or not amount_naira:
+            return Response(
+                {"error": "landlord_id and amount required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Step 1: Look up the landlord
+        try:
+            landlord = Landlord.objects.get(id=landlord_id)
+        except Landlord.DoesNotExist:
+            return Response(
+                {"error": "Landlord not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Step 2: Generate order reference and convert amount to kobo
+        order_reference = str(uuid.uuid4())
+        amount_kobo = int(float(amount_naira) * 100)  # convert naira to kobo
+
+        # Step 3: Create Payment record in database with status pending
+        payment = Payment.objects.create(
+            tenant=tenant,
+            landlord=landlord,
+            order_reference=order_reference,
+            expected_amount=amount_kobo,
+            status=Payment.Status.PENDING,
+        )
+
+        # Step 4: Call Nomba checkout API
+        checkout_response = nomba_post('/checkout/order', {
+            'order': {
+                'orderReference': order_reference,
+                'amount': amount_kobo,
+                'currency': 'NGN',
+                'customerEmail': tenant.email,
+                'customerId': str(tenant.id),
+                'accountId': landlord.nomba_subaccount_id,
+                'callbackUrl': f"{settings.BASE_URL}/api/payments/callback/",
+                'orderMetaData': {
+                    'landlordId': str(landlord.id),
+                    'tenantId': str(tenant.id),
+                    'paymentId': str(payment.id),
+                }
+            }
+        })
+
+        # Check if checkout creation was successful
+        if checkout_response.get('code') != '00':
+            # Delete the payment record we just created since checkout failed
+            payment.delete()
+            return Response(
+                {"error": "Failed to create checkout order", "details": checkout_response},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        # Step 5: Return the checkout URL to the tenant
+        checkout_url = checkout_response['data']['checkoutLink']
+
+        return Response({
+            'message': 'Payment initiated successfully',
+            'order_reference': order_reference,
+            'amount_naira': amount_naira,
+            'amount_kobo': amount_kobo,
+            'checkout_url': checkout_url,
+            'payment_id': payment.id,
+        }, status=status.HTTP_201_CREATED)
