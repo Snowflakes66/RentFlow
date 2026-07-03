@@ -57,5 +57,5 @@ DB_PORT=5432
 ## Notes
 
 Subaccount creation via API returns 500 in Nomba sandbox, using a shared sandbox subaccount as workaround. In production each landlord gets their own subaccount.
-Webhook signature verification is implemented and ready, pending Nomba dashboard access to configure the webhook secret.
+Webhook signature verification is fully implemented in code. However, the Nomba developer dashboard was inaccessible during the build phase (password reset emails were not delivered), so the webhook secret and URL could not be configured. The verification logic is ready and will work once dashboard access is restored.
 Amounts are stored and transmitted in kobo (1 NGN = 100 kobo).

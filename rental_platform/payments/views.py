@@ -268,7 +268,7 @@ class WebhookView(APIView):
             request_id=request_id,
             event_type=event_type,
             raw_payload=data,
-            signature_valid=True,
+            signature_valid=is_valid if (nomba_signature and settings.NOMBA_WEBHOOK_SECRET) else False,
         )
 
         # Step 7: Handle payment_success event
