@@ -1,13 +1,19 @@
 from django.shortcuts import render
-
 import uuid
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.contrib.auth.models import User
-from .models import Landlord, Tenant, Payment
+from .models import Landlord, Tenant, Payment, WebhookEvent
 from .nomba_client import nomba_post
 from django.conf import settings
+import hmac
+import hashlib
+import base64
+import json
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.utils import timezone
 
 
 class LandlordRegistrationView(APIView):
@@ -217,3 +223,117 @@ class InitiatePaymentView(APIView):
             'checkout_url': checkout_url,
             'payment_id': payment.id,
         }, status=status.HTTP_201_CREATED)
+    
+
+
+
+
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class WebhookView(APIView):
+    authentication_classes = []  # No JWT auth for webhooks - Nomba signs them instead
+    permission_classes = []
+
+    def post(self, request):
+        # Step 1: Get the signature and timestamp from Nomba's headers
+        nomba_signature = request.headers.get('nomba-signature')
+        nomba_timestamp = request.headers.get('nomba-timestamp')
+
+        # Step 2: Get the raw request body
+        payload = request.body.decode('utf-8')
+
+        # Step 3: Verify the signature to confirm this is genuinely from Nomba
+        if nomba_signature and settings.NOMBA_WEBHOOK_SECRET:
+            is_valid = self.verify_signature(payload, nomba_signature, nomba_timestamp)
+            if not is_valid:
+                return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Step 4: Parse the payload
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
+
+        event_type = data.get('event_type')
+        request_id = data.get('requestId')
+
+        # Step 5: Check for duplicate webhooks using requestId
+        if WebhookEvent.objects.filter(request_id=request_id).exists():
+            # Already processed this event - return 200 so Nomba stops retrying
+            return Response({'message': 'Already processed'}, status=status.HTTP_200_OK)
+
+        # Step 6: Save the webhook event to database
+        WebhookEvent.objects.create(
+            request_id=request_id,
+            event_type=event_type,
+            raw_payload=data,
+            signature_valid=True,
+        )
+
+        # Step 7: Handle payment_success event
+        if event_type == 'payment_success':
+            self.handle_payment_success(data)
+
+        # Step 8: Always return 200 quickly so Nomba doesn't retry
+        return Response({'message': 'Webhook received'}, status=status.HTTP_200_OK)
+
+    def verify_signature(self, payload, nomba_signature, nomba_timestamp):
+        try:
+            data = json.loads(payload)
+            transaction = data.get('data', {}).get('transaction', {})
+            merchant = data.get('data', {}).get('merchant', {})
+
+            # Construct the exact string Nomba uses to generate the signature
+            hashing_payload = ':'.join([
+                data.get('event_type', ''),
+                data.get('requestId', ''),
+                merchant.get('userId', ''),
+                merchant.get('walletId', ''),
+                transaction.get('transactionId', ''),
+                transaction.get('type', ''),
+                transaction.get('time', ''),
+                transaction.get('responseCode', '') or '',
+                nomba_timestamp or '',
+            ])
+
+            # Compute HMAC-SHA256 and base64 encode it
+            computed = hmac.new(
+                settings.NOMBA_WEBHOOK_SECRET.encode(),
+                hashing_payload.encode(),
+                hashlib.sha256
+            ).digest()
+
+            computed_b64 = base64.b64encode(computed).decode()
+            return computed_b64 == nomba_signature
+
+        except Exception:
+            return False
+
+    def handle_payment_success(self, data):
+        try:
+            order = data.get('data', {}).get('order', {})
+            transaction = data.get('data', {}).get('transaction', {})
+
+            order_reference = order.get('orderReference')
+            amount_received = int(float(transaction.get('transactionAmount', 0)) * 100)  # convert to kobo
+
+            # Find the payment record in our database
+            payment = Payment.objects.get(order_reference=order_reference)
+
+            # Compare amounts and set status
+            if amount_received < payment.expected_amount:
+                payment.status = Payment.Status.UNDERPAID
+            elif amount_received > payment.expected_amount:
+                payment.status = Payment.Status.OVERPAID
+            else:
+                payment.status = Payment.Status.CONFIRMED
+
+            payment.amount_received = amount_received
+            payment.confirmed_at = timezone.now()
+            payment.save()
+
+        except Payment.DoesNotExist:
+            pass  # Payment not found - log it but don't crash
+        except Exception:
+            pass  # Don't crash the webhook response

@@ -1,9 +1,10 @@
 from django.urls import path
-from .views import LandlordRegistrationView, TenantRegistrationView, InitiatePaymentView
+from .views import LandlordRegistrationView, TenantRegistrationView, InitiatePaymentView, WebhookView
 
 
 urlpatterns = [
     path('landlords/register/', LandlordRegistrationView.as_view(), name='landlord-register'),
     path('tenants/register/', TenantRegistrationView.as_view(), name='tenant-register'),
     path('payments/initiate/', InitiatePaymentView.as_view(), name='initiate-payment'),
+    path('payments/webhook/', WebhookView.as_view(), name='webhook'),
 ]
