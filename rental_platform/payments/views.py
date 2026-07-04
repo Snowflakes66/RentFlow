@@ -200,6 +200,19 @@ class InitiatePaymentView(APIView):
                     'tenantId': str(tenant.id),
                     'paymentId': str(payment.id),
                 }
+            },
+             'splitRequest': {
+                'splitType': 'PERCENTAGE',
+                'splitList': [
+                    {
+                        'accountId': landlord.nomba_subaccount_id,
+                        'value': '98.00'  # landlord gets 98%
+                    },
+                    {
+                        'accountId': settings.NOMBA_PLATFORM_SUBACCOUNT_ID,
+                        'value': '2.00'  # platform keeps 2%
+                    }
+                ]
             }
         })
 
