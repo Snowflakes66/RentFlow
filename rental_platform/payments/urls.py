@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import LandlordRegistrationView, TenantRegistrationView, InitiatePaymentView, WebhookView,PaymentCallbackView
+from .views import LandlordRegistrationView, TenantRegistrationView, InitiatePaymentView, WebhookView,PaymentCallbackView, VerifyPaymentView
 
 
 urlpatterns = [
@@ -8,4 +8,5 @@ urlpatterns = [
     path('payments/initiate/', InitiatePaymentView.as_view(), name='initiate-payment'),
     path('payments/webhook/', WebhookView.as_view(), name='webhook'),
     path('payments/callback/', PaymentCallbackView.as_view(), name='payment-callback'),
+    path('payments/verify/<str:order_reference>/', VerifyPaymentView.as_view(), name='verify-payment'),
 ]

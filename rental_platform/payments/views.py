@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.contrib.auth.models import User
 from .models import Landlord, Tenant, Payment, WebhookEvent
-from .nomba_client import nomba_post
+from .nomba_client import nomba_post, nomba_get
 from django.conf import settings
 import hmac
 import hashlib
@@ -349,4 +349,46 @@ class PaymentCallbackView(APIView):
         return Response({
             'message': 'Payment completed. Your rent payment is being processed.',
             'order_reference': order_reference,
+        }, status=status.HTTP_200_OK)
+    
+
+
+
+
+
+class VerifyPaymentView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, order_reference):
+        # Step 1: Look up the payment in our database
+        try:
+            payment = Payment.objects.get(order_reference=order_reference)
+        except Payment.DoesNotExist:
+            return Response(
+                {"error": "Payment not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Step 2: Verify with Nomba's transactions API
+        nomba_response = nomba_get(
+            '/transactions/accounts/single',
+            params={'orderReference': order_reference}
+        )
+
+        if nomba_response.get('code') != '00':
+            return Response(
+                {"error": "Could not verify with Nomba", "details": nomba_response},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        nomba_status = nomba_response.get('data', {}).get('status')
+
+        # Step 3: Return combined status from our DB and Nomba
+        return Response({
+            'order_reference': order_reference,
+            'our_status': payment.status,
+            'nomba_status': nomba_status,
+            'amount_expected': payment.expected_amount,
+            'amount_received': payment.amount_received,
+            'confirmed_at': payment.confirmed_at,
         }, status=status.HTTP_200_OK)
