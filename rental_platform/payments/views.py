@@ -337,3 +337,16 @@ class WebhookView(APIView):
             pass  # Payment not found - log it but don't crash
         except Exception:
             pass  # Don't crash the webhook response
+
+
+
+class PaymentCallbackView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        order_reference = request.query_params.get('orderReference')
+        return Response({
+            'message': 'Payment completed. Your rent payment is being processed.',
+            'order_reference': order_reference,
+        }, status=status.HTTP_200_OK)
