@@ -139,7 +139,7 @@ python manage.py runserver
 
 ## Known Sandbox Limitations
 
-**Webhook tested end-to-end via simulated payload** — HMAC-SHA256 signature verification, idempotent `requestId` deduplication, and automatic payment status resolution (confirmed/underpaid/overpaid) all confirmed working. The Nomba developer dashboard was inaccessible during development (password reset emails not delivered), so the webhook secret could not be configured via the dashboard — meaning live Nomba-signed webhooks could not be tested. The webhook URL was submitted via the provided Google Form and the Nomba team was contacted on Slack. Once the webhook secret is configured, the handler will work with real Nomba events without any code changes.
+**Webhook tested end-to-end with real Nomba events** — Signature verification passed, deduplication works, and payment status updated to confirmed automatically Webhook secret was shared by the Nomba team on Slack. URL was registered via the Google Form they provided.
 
 **Subaccount creation via API** — `POST /accounts/sub-accounts` returns a 500 error in Nomba's sandbox. A shared subaccount ID is used for both landlord and platform splits as a deliberate workaround. The code is production-ready and would use separate subaccounts in a live environment.
 
