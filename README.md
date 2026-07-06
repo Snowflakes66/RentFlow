@@ -43,7 +43,7 @@ RentFlow solves a real problem in the Nigerian rental market: rent payments are 
 2. Tenant registers and authenticates via JWT
 3. Tenant initiates payment → pending `Payment` record created → Nomba Checkout API called → `checkoutLink` returned
 4. Tenant completes payment on hosted checkout page
-5. Nomba sends webhook POST → HMAC-SHA256 signature verified → `requestId` deduplication check → payment status resolved (confirmed / underpaid / overpaid)
+5. Nomba sends webhook POST → HMAC-SHA256 signature verified → `requestId` deduplication check → payment status resolved (confirmed / underpaid / overpaid) — **tested end-to-end against real Nomba sandbox events**
 6. Payment can be independently verified via the verify endpoint at any time
 
 ---
@@ -138,8 +138,6 @@ python manage.py runserver
 ---
 
 ## Known Sandbox Limitations
-
-**Webhook tested end-to-end with real Nomba events** — Signature verification passed, deduplication works, and payment status updated to confirmed automatically Webhook secret was shared by the Nomba team on Slack. URL was registered via the Google Form they provided.
 
 **Subaccount creation via API** — `POST /accounts/sub-accounts` returns a 500 error in Nomba's sandbox. A shared subaccount ID is used for both landlord and platform splits as a deliberate workaround. The code is production-ready and would use separate subaccounts in a live environment.
 
